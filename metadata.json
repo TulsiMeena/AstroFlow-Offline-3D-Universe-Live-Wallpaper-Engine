@@ -1,0 +1,6 @@
+{
+  "name": "Amit HyperWall",
+  "description": "Ultra-advanced offline 3D Living Wallpaper Engine with Smart Wallpaper Scheduler & Context Automation Engine, Local Wallpaper Library, Personal 3D Universe Generator, Wallpaper Fusion Lab, Battery & Smart Power Engine, and procedural WebGL rendering.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

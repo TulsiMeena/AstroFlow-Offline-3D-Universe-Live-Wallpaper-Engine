@@ -1,0 +1,30 @@
+@import "tailwindcss";
+
+body {
+  background-color: #05070e;
+  color: #f1f5f9;
+  overflow: hidden;
+  touch-action: pan-y;
+}
+
+/* Glassmorphism helpers */
+.glass-panel {
+  background: rgba(10, 15, 29, 0.82);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-glow {
+  box-shadow: 0 0 25px rgba(0, 240, 255, 0.15);
+}
+
+/* Animations */
+@keyframes pulse-slow {
+  0%, 100% { opacity: 0.8; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.05); }
+}
+
+.animate-pulse-slow {
+  animation: pulse-slow 3s infinite ease-in-out;
+}
