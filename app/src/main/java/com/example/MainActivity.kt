@@ -4,9 +4,14 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Color
 import android.os.Bundle
+import android.util.Log
 import android.view.View
+import android.webkit.ConsoleMessage
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -24,6 +29,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.viewinterop.AndroidView
 import com.example.ui.theme.MyApplicationTheme
+import java.io.InputStream
 
 class MainActivity : ComponentActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
@@ -54,7 +60,7 @@ class AndroidWallpaperBridge(private val context: Context) {
 
   @JavascriptInterface
   fun onWallpaperChanged(wallpaperId: String) {
-    android.util.Log.d("AmitHyperWall", "Active wallpaper switched to: $wallpaperId")
+    Log.d("AmitHyperWall", "Active wallpaper switched to: $wallpaperId")
   }
 }
 
@@ -76,25 +82,92 @@ fun HyperWallWebView(modifier: Modifier = Modifier) {
         settings.apply {
           javaScriptEnabled = true
           domStorageEnabled = true
+          databaseEnabled = true
           allowFileAccess = true
           allowContentAccess = true
-          databaseEnabled = true
+          allowFileAccessFromFileURLs = true
+          allowUniversalAccessFromFileURLs = true
           cacheMode = WebSettings.LOAD_DEFAULT
           useWideViewPort = true
           loadWithOverviewMode = true
           mediaPlaybackRequiresUserGesture = false
+          mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
         }
 
         addJavascriptInterface(bridge, "AndroidBridge")
 
-        webChromeClient = WebChromeClient()
-        webViewClient = object : WebViewClient() {
-          override fun onPageFinished(view: WebView?, url: String?) {
-            super.onPageFinished(view, url)
+        webChromeClient = object : WebChromeClient() {
+          override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
+            Log.d(
+              "HyperWallWeb",
+              "${consoleMessage?.message()} [${consoleMessage?.sourceId()}:${consoleMessage?.lineNumber()}]"
+            )
+            return super.onConsoleMessage(consoleMessage)
           }
         }
 
-        loadUrl("file:///android_asset/web/index.html")
+        webViewClient = object : WebViewClient() {
+          override fun shouldInterceptRequest(
+            view: WebView?,
+            request: WebResourceRequest?
+          ): WebResourceResponse? {
+            val url = request?.url ?: return null
+            val isAppHost = (url.scheme == "https" && url.host == "appassets.local")
+            val isAssetFile = (url.scheme == "file" && url.path?.contains("/android_asset/web") == true)
+
+            if (isAppHost || isAssetFile) {
+              val relativePath = if (isAppHost) {
+                val p = url.path?.trimStart('/') ?: "index.html"
+                if (p.isEmpty()) "index.html" else p
+              } else {
+                url.path?.substringAfter("/android_asset/web/")?.trimStart('/')?.ifEmpty { "index.html" } ?: "index.html"
+              }
+
+              val assetPath = "web/$relativePath"
+              try {
+                val stream: InputStream = ctx.assets.open(assetPath)
+                val cleanPath = relativePath.lowercase()
+                val mimeType = when {
+                  cleanPath.endsWith(".html") || cleanPath.endsWith(".htm") -> "text/html"
+                  cleanPath.endsWith(".js") || cleanPath.endsWith(".mjs") -> "application/javascript"
+                  cleanPath.endsWith(".css") -> "text/css"
+                  cleanPath.endsWith(".json") || cleanPath.endsWith(".webmanifest") -> "application/json"
+                  cleanPath.endsWith(".svg") -> "image/svg+xml"
+                  cleanPath.endsWith(".png") -> "image/png"
+                  cleanPath.endsWith(".jpg") || cleanPath.endsWith(".jpeg") -> "image/jpeg"
+                  cleanPath.endsWith(".webp") -> "image/webp"
+                  cleanPath.endsWith(".ico") -> "image/x-icon"
+                  cleanPath.endsWith(".woff2") -> "font/woff2"
+                  cleanPath.endsWith(".woff") -> "font/woff"
+                  cleanPath.endsWith(".ttf") -> "font/ttf"
+                  else -> "application/octet-stream"
+                }
+
+                val headers = mapOf(
+                  "Access-Control-Allow-Origin" to "*",
+                  "Access-Control-Allow-Methods" to "GET, OPTIONS",
+                  "Access-Control-Allow-Headers" to "*",
+                  "Cache-Control" to "no-cache"
+                )
+                return WebResourceResponse(mimeType, "UTF-8", 200, "OK", headers, stream)
+              } catch (e: Exception) {
+                Log.w("HyperWallWeb", "Asset intercept fallback for: $assetPath - ${e.message}")
+              }
+            }
+            return super.shouldInterceptRequest(view, request)
+          }
+
+          override fun onReceivedError(
+            view: WebView?,
+            request: WebResourceRequest?,
+            error: WebResourceError?
+          ) {
+            super.onReceivedError(view, request, error)
+            Log.e("HyperWallWeb", "WebView Error on ${request?.url}: ${error?.description}")
+          }
+        }
+
+        loadUrl("https://appassets.local/index.html")
       }
     }
   )
@@ -104,3 +177,4 @@ fun HyperWallWebView(modifier: Modifier = Modifier) {
 fun Greeting(name: String, modifier: Modifier = Modifier) {
   Text(text = "Hello $name!", modifier = modifier)
 }
+
